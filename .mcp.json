@@ -2,7 +2,7 @@
   "mcpServers": {
     "linker": {
       "command": "npx",
-      "args": ["-y", "linker-mcp"]
+      "args": ["-y", "github:nautilux/linker"]
     }
   }
 }

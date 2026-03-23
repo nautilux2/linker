@@ -22,20 +22,16 @@ When you have two or more Claude Code sessions open (different projects, termina
 
 Claude Code reads `.mcp.json` and starts the server automatically via `npx`. No installs, no config. Restart Claude Code and the tools are live.
 
-### Via npm (manual)
+### Manual (no plugin marketplace)
 
-```bash
-npm install -g linker-mcp
-```
-
-Then add to `~/.claude/settings.json`:
+Add to `~/.claude/settings.json`:
 
 ```json
 {
   "mcpServers": {
     "linker": {
       "command": "npx",
-      "args": ["-y", "linker-mcp"]
+      "args": ["-y", "github:nautilux/linker"]
     }
   }
 }
