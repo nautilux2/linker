@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "linker": {
+      "command": "python3",
+      "args": ["-m", "linker_mcp"]
+    }
+  }
+}

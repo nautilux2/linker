@@ -1,0 +1,7 @@
+{
+  "name": "linker",
+  "description": "Bridge multiple Claude Code instances together — share context, send messages, ask questions across sessions.",
+  "version": "1.0.0",
+  "author": { "name": "nautilux", "email": "nautilux@outlook.com" },
+  "homepage": "https://github.com/nautilux/linker"
+}
