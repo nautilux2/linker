@@ -14,29 +14,28 @@ When you have two or more Claude Code sessions open (different projects, termina
 
 ## Install
 
-### As a Claude Code plugin (recommended)
+### As a Claude Code plugin (recommended — zero commands)
 
-```bash
+```
 /plugin install linker@nautilux
 ```
 
-Claude Code reads `.mcp.json` automatically — linker tools appear in the next session.
+Claude Code reads `.mcp.json` and starts the server automatically via `npx`. No installs, no config. Restart Claude Code and the tools are live.
 
-### Via pip
+### Via npm (manual)
 
 ```bash
-pip install linker-mcp
+npm install -g linker-mcp
 ```
 
-Then add to Claude Code manually:
+Then add to `~/.claude/settings.json`:
 
-```bash
-# ~/.claude/settings.json or .claude/settings.json
+```json
 {
   "mcpServers": {
     "linker": {
-      "command": "python3",
-      "args": ["-m", "linker_mcp"]
+      "command": "npx",
+      "args": ["-y", "linker-mcp"]
     }
   }
 }
