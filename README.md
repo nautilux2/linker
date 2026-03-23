@@ -17,7 +17,7 @@ When you have two or more Claude Code sessions open (different projects, termina
 ### As a Claude Code plugin (recommended — zero commands)
 
 ```
-/plugin install linker@nautilux
+/plugin install linker@nautilux2
 ```
 
 Claude Code reads `.mcp.json` and starts the server automatically via `npx`. No installs, no config. Restart Claude Code and the tools are live.
@@ -31,7 +31,7 @@ Add to `~/.claude/settings.json`:
   "mcpServers": {
     "linker": {
       "command": "npx",
-      "args": ["-y", "github:nautilux/linker"]
+      "args": ["-y", "github:nautilux2/linker"]
     }
   }
 }
@@ -110,4 +110,4 @@ The host is a lightweight in-memory HTTP server. Each Claude Code session runs i
 
 ## License
 
-MIT — © 2024 [nautilux](https://github.com/nautilux)
+MIT — © 2024 [nautilux2](https://github.com/nautilux2)

@@ -4,9 +4,9 @@
   "description": "Bridge multiple Claude Code instances — share context, messages, and Q&A across sessions",
   "bin": { "linker-mcp": "./index.js" },
   "main": "./index.js",
-  "author": "nautilux <nautilux@outlook.com>",
+  "author": "nautilux2 <nautilux@outlook.com>",
   "license": "MIT",
-  "repository": { "type": "git", "url": "https://github.com/nautilux/linker.git" },
-  "homepage": "https://github.com/nautilux/linker",
+  "repository": { "type": "git", "url": "https://github.com/nautilux2/linker.git" },
+  "homepage": "https://github.com/nautilux2/linker",
   "keywords": ["claude", "mcp", "claude-code", "multi-agent", "bridge"]
 }
