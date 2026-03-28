@@ -212,16 +212,21 @@ async function run(interval) {
 
 // ── Entry ─────────────────────────────────────────────────────────────────────
 
-const argv = process.argv.slice(2)
-const flag = (f, def) => { const i = argv.indexOf(f); return i >= 0 ? argv[i + 1] : def }
-const interval = parseInt(flag('--interval', '2000'))
-const name     = flag('--name', null)
+function main() {
+  const argv = process.argv.slice(2)
+  const flag = (f, def) => { const i = argv.indexOf(f); return i >= 0 ? argv[i + 1] : def }
+  const interval = parseInt(flag('--interval', '2000'))
+  const name     = flag('--name', null)
 
-if (name) {
-  const cfg = loadCfg()
-  if (!cfg) { console.error('No hub configured. Join first.'); process.exit(1) }
-  cfg.name = name
-  fs.writeFileSync(CONFIG, JSON.stringify(cfg))
+  if (name) {
+    const cfg = loadCfg()
+    if (!cfg) { console.error('No hub configured. Join first.'); process.exit(1) }
+    cfg.name = name
+    fs.writeFileSync(CONFIG, JSON.stringify(cfg))
+  }
+
+  run(interval).catch(e => { console.error(e.message); process.exit(1) })
 }
 
-run(interval).catch(e => { console.error(e.message); process.exit(1) })
+if (require.main === module) main()
+else module.exports = { run, main, BUS_DIR }

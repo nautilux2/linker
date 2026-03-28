@@ -266,7 +266,7 @@ function startServer(port) {
 
 // ── Entry ─────────────────────────────────────────────────────────────────────
 
-if (require.main === module) {
+function main() {
   const argv = process.argv.slice(2)
   const flag = (f, def) => { const i = argv.indexOf(f); return i >= 0 ? argv[i + 1] : def }
   const port = parseInt(flag('--port', '7720'))
@@ -296,6 +296,7 @@ if (require.main === module) {
   console.log(`  const tools = await fetch('http://localhost:${port}/tools').then(r => r.json())`)
   console.log(`  // include tools[] in your OpenAI API request`)
   console.log(`  // for each tool_call: POST /call with { name, arguments }`)
-} else {
-  module.exports = { tools, execute }
 }
+
+if (require.main === module) main()
+else module.exports = { tools, execute, main }

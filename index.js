@@ -437,4 +437,6 @@ if      (cmd === 'mcp' || cmd === '')  runMcp()
 else if (cmd === 'host')               { startHost(parseInt(args[0]) || DEFAULT_PORT); console.log(`Host → http://localhost:${parseInt(args[0]) || DEFAULT_PORT}`) }
 else if (cmd === '_daemon')            startHost(parseInt(args[0]) || DEFAULT_PORT)
 else if (cmd === 'inject')             runInject(args[0] || process.cwd())
-else                                   { console.error('Usage: linker-mcp [mcp|host [PORT]|inject [DIR]]'); process.exit(1) }
+else if (cmd === 'filewatch')          require('./adapters/filewatch').main()
+else if (cmd === 'openai')             require('./adapters/openai').main()
+else                                   { console.error('Usage: linker-mcp [mcp|host [PORT]|inject [DIR]|filewatch|openai]'); process.exit(1) }

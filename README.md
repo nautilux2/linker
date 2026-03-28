@@ -4,30 +4,35 @@ Bridge multiple AI coding instances together — share context, send messages, a
 
 Works with **Claude Code**, **Cursor**, **Windsurf**, **Aider**, **Codex CLI**, **Continue**, and any OpenAI-API-based agent.
 
-## What it does
-
-When you have two or more AI sessions open (different tools, terminals, or machines), linker lets them coordinate as a group:
-
-- **Send / receive messages** between specific instances or broadcast to all
-- **Ask / answer questions** across sessions — one instance asks, another answers
-- **Shared context store** — set and get key-value facts visible to all instances
-- **Presence tracking** — see which AI tools are connected and their agent types
-- **Auto-discovery** — new instances scan for an active host and join automatically
-- **Native tool integration** — no manual commands; each AI invokes linker tools on its own
-
 ## Install
 
-### Claude Code / Cursor / Windsurf (MCP — zero config)
+### MCP tools — one command, zero config
 
 ```
 /plugin install linker@nautilux2
 ```
 
-Claude Code reads `.mcp.json` and starts the server automatically via `npx`. Restart and the tools are live.
+Works in Claude Code, Cursor, Windsurf, and any MCP-compatible tool. Restart and the tools are live — nothing else needed.
 
-### Manual MCP (any MCP-compatible tool)
+### Non-MCP tools — npx one-liners
 
-Add to `~/.claude/settings.json` (or your tool's equivalent):
+First, join a running host (started by one of the MCP instances above):
+
+```bash
+# Aider
+npx github:nautilux2/linker join http://HOST:7700 --name aider
+npx github:nautilux2/linker filewatch --name aider
+# then: aider --read ~/.linker/bus/context.json --read ~/.linker/bus/who.json
+
+# OpenAI agents (Codex CLI, GPT-4 loops, LangChain, etc.)
+npx github:nautilux2/linker join http://HOST:7700 --name codex
+npx github:nautilux2/linker openai --name codex
+# then: fetch tools from http://localhost:7720/tools
+```
+
+### Manual MCP (no plugin marketplace)
+
+Add to your tool's MCP settings:
 
 ```json
 {
@@ -40,40 +45,15 @@ Add to `~/.claude/settings.json` (or your tool's equivalent):
 }
 ```
 
-### OpenAI-based agents (Codex CLI, GPT-4 agent loops)
+## What it does
 
-```bash
-npx github:nautilux2/linker join <host-url> --name YOUR_NAME
-node adapters/openai.js --name YOUR_NAME
-```
+When you have two or more AI sessions open (different tools, terminals, or machines), linker lets them coordinate as a group:
 
-Then in your agent loop:
-
-```js
-const linker = require('linker-mcp/adapters/openai')
-// include linker.tools in your OpenAI API request
-// call linker.execute(name, args) for each tool_call returned
-```
-
-See `adapters/openai.js` for a complete agent loop example.
-
-### Aider / file-based agents
-
-```bash
-npx github:nautilux2/linker join <host-url> --name YOUR_NAME
-node adapters/filewatch.js --name YOUR_NAME &
-aider --read ~/.linker/bus/context.json \
-      --read ~/.linker/bus/who.json \
-      --read ~/.linker/bus/pending.json
-```
-
-### Inject rules into any project
-
-```bash
-npx github:nautilux2/linker inject
-```
-
-Writes coordination rules to `.cursorrules`, `.windsurfrules`, and `AGENT.md` in the current directory. Idempotent — safe to re-run.
+- **Send / receive messages** between specific instances or broadcast to all
+- **Ask / answer questions** across sessions — one instance asks, another answers
+- **Shared context store** — set and get key-value facts visible to all instances
+- **Presence tracking** — see which AI tools are connected and their agent types
+- **Auto-discovery** — new instances scan for an active host and join automatically
 
 ## Setup flow
 
@@ -97,11 +77,9 @@ On startup the AI scans ports 7700–7710, finds the host, and joins automatical
 connect(action="scan")
 → Found: http://localhost:7700 (instances: ['alice'])
 
-connect(action="join", url="http://localhost:7700", name="bob", agent_type="cursor")
+connect(action="join", url="http://localhost:7700", name="bob")
 → Joined. All tools active.
 ```
-
-Non-Claude AIs can identify their type with `agent_type` — visible to all instances via `who`.
 
 ## Tools
 
@@ -118,82 +96,40 @@ Non-Claude AIs can identify their type with `agent_type` — visible to all inst
 | `who` | List all connected instances, their agent types, and last-seen time |
 | `log` | Show recent messages, questions, and context |
 
-## Multi-AI coordination
+## Multi-AI presence
 
-`who` now returns agent type information so instances know who they're talking to:
+`who` returns agent type so instances know who they're talking to:
 
 ```json
 {
-  "alice": { "agent_type": "claude", "tool": "claude-code", "last_seen": "14:32:01" },
-  "bob":   { "agent_type": "cursor", "tool": "Cursor",      "last_seen": "14:32:05" },
-  "carol": { "agent_type": "codex",  "tool": "codex",       "last_seen": "14:31:58" }
+  "alice": { "agent_type": "claude",  "tool": "claude-code", "last_seen": "14:32:01" },
+  "bob":   { "agent_type": "cursor",  "tool": "Cursor",      "last_seen": "14:32:05" },
+  "carol": { "agent_type": "codex",   "tool": "codex",       "last_seen": "14:31:58" }
 }
 ```
 
-The hub also exposes `GET /tools.openai` — linker tool definitions in OpenAI function-calling format, for dynamic discovery by agent frameworks.
+## Inject rules into any project
 
-## How each AI uses linker tools
-
-| AI tool | Transport | Behavior injection |
-|---|---|---|
-| Claude Code | MCP stdio | `CLAUDE.md` (project) |
-| Cursor | MCP stdio | `.cursorrules` via `inject` |
-| Windsurf | MCP stdio | `.windsurfrules` via `inject` |
-| Continue | MCP stdio | `systemMessage` in config.json |
-| Codex CLI / GPT agents | `adapters/openai.js` | System prompt from `AGENT.md` |
-| Aider | `adapters/filewatch.js` | `--read AGENT.md` |
-| Any script | `adapters/filewatch.js` | Poll `~/.linker/bus/out/` |
-
-## Adapters
-
-### `adapters/openai.js`
-
-Standalone HTTP server (port 7720) and importable module. Wraps linker tools in OpenAI function-calling format.
-
-```
-GET  /tools  → OpenAI tool definitions array
-POST /call   → { "name": "linker_send", "arguments": {...} } → { "result": "..." }
+```bash
+npx github:nautilux2/linker inject
 ```
 
-Tool names are prefixed `linker_` to avoid collisions (e.g. `linker_send`, `linker_ask`).
-
-### `adapters/filewatch.js`
-
-Polls the hub every 2s and writes state snapshots to `~/.linker/bus/`:
-
-```
-~/.linker/bus/context.json   — shared key-value context
-~/.linker/bus/who.json       — connected instances
-~/.linker/bus/messages.json  — your unread messages
-~/.linker/bus/pending.json   — unanswered questions
-```
-
-Script agents can also execute tools by dropping files in `~/.linker/bus/out/`:
-
-```json
-{ "id": "001", "name": "send", "arguments": { "content": "done with auth" } }
-```
-
-Result appears in `~/.linker/bus/in/001.json`.
+Writes coordination rules to `.cursorrules`, `.windsurfrules`, and `AGENT.md` in the current directory. Safe to re-run (idempotent).
 
 ## Architecture
 
 ```
 linker host (HTTP daemon, port 7700)
-  ├── /send  /recv  /ask  /answer  /set  /get  /who  /pending  /log
-  ├── /tools.openai  (OpenAI function-calling format, for agent discovery)
-  │
-  ├── instance alice  →  MCP stdio  (Claude Code / Cursor / Windsurf)
-  ├── instance bob    →  adapters/openai.js  (Codex CLI / GPT agents)
-  └── instance carol  →  adapters/filewatch.js  (Aider / scripts)
+  ├── instance alice  →  MCP stdio       (Claude Code / Cursor / Windsurf)
+  ├── instance bob    →  openai adapter  (Codex CLI / GPT-4 agent loops)
+  └── instance carol  →  filewatch       (Aider / shell scripts)
 ```
 
-The host is a lightweight in-memory HTTP server. Each AI session connects via its own transport. All state lives in the host process; if the host restarts, state resets (no persistence by design — sessions are ephemeral).
+The host is a lightweight in-memory HTTP server. All state is ephemeral — resets if the host restarts.
 
 ## Requirements
 
-- Node.js 18+ (for the JS implementation — recommended)
-- Python 3.8+ (for `linker.py` — manual installs only)
+- Node.js 18+
 - No additional dependencies (stdlib only)
 
 ## License
