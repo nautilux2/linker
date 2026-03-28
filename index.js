@@ -10,8 +10,14 @@ const readline  = require('readline')
 
 const CONFIG      = path.join(os.homedir(), '.linker')
 const PID_FILE    = path.join(os.homedir(), '.linker_host_pid')
+const RULES_FILE  = path.join(__dirname, 'rules', 'AGENT.md')
 const SCAN_PORTS  = Array.from({ length: 11 }, (_, i) => 7700 + i)
 const DEFAULT_PORT = 7700
+
+// Detected at MCP initialize time; included in heartbeats so the hub knows
+// which AI tool each instance is.
+let _agentType = 'unknown'
+let _agentTool = 'unknown'
 
 // ── Config ────────────────────────────────────────────────────────────────────
 
@@ -108,12 +114,23 @@ function startHost(port) {
           send(200, { messages: state.messages.slice(-30), questions: state.questions.slice(-30),
                       context: state.context, instances: state.instances })
         }
+        else if (p === '/tools.openai') {
+          send(200, TOOLS_MAIN.map(t => ({
+            type: 'function',
+            function: { name: t.name, description: t.description, parameters: t.inputSchema }
+          })))
+        }
         else send(404, { error: 'unknown' })
       }
 
       else if (req.method === 'POST') {
         if (p === '/heartbeat') {
-          state.instances[b.name || '?'] = { last_seen: now() }
+          state.instances[b.name || '?'] = {
+            last_seen:    now(),
+            agent_type:   b.agent_type   || null,
+            tool:         b.tool         || null,
+            capabilities: b.capabilities || [],
+          }
           send(200)
         }
         else if (p === '/send') {
@@ -161,10 +178,11 @@ const TOOLS_SETUP = [{
   inputSchema: {
     type: 'object',
     properties: {
-      action: { type: 'string', enum: ['scan', 'join', 'host', 'status'] },
-      url:    { type: 'string',  description: 'Host URL (for join)' },
-      name:   { type: 'string',  description: 'Your instance name' },
-      port:   { type: 'integer', description: 'Port for host mode (default 7700)' }
+      action:     { type: 'string', enum: ['scan', 'join', 'host', 'status'] },
+      url:        { type: 'string',  description: 'Host URL (for join)' },
+      name:       { type: 'string',  description: 'Your instance name' },
+      port:       { type: 'integer', description: 'Port for host mode (default 7700)' },
+      agent_type: { type: 'string',  description: 'AI type: claude, cursor, codex, aider, etc.' }
     },
     required: ['action']
   }
@@ -185,7 +203,8 @@ const TOOLS_MAIN = [
 
 // ── connect handler ───────────────────────────────────────────────────────────
 
-async function handleConnect({ action, url, name, port = DEFAULT_PORT }) {
+async function handleConnect({ action, url, name, port = DEFAULT_PORT, agent_type }) {
+  if (agent_type) { _agentType = agent_type; _agentTool = agent_type }
   if (action === 'status') {
     const cfg = loadCfg()
     if (!cfg) return 'Not connected. Use action="scan" or action="host".'
@@ -231,7 +250,7 @@ async function handleConnect({ action, url, name, port = DEFAULT_PORT }) {
     if (!url || !name) return 'Required: url and name.'
     try { await request('GET', url, '/ping') } catch(e) { return `Cannot reach ${url}: ${e.message}` }
     saveCfg(url, name)
-    try { await request('POST', url, '/heartbeat', { name }) } catch {}
+    try { await request('POST', url, '/heartbeat', { name, agent_type: _agentType, tool: _agentTool }) } catch {}
     return `Joined ${url} as '${name}'. All tools are now active.`
   }
 
@@ -253,7 +272,7 @@ async function handleConnect({ action, url, name, port = DEFAULT_PORT }) {
       try { await request('GET', hostUrl, '/ping'); break } catch {}
     }
     saveCfg(hostUrl, name)
-    try { await request('POST', hostUrl, '/heartbeat', { name }) } catch {}
+    try { await request('POST', hostUrl, '/heartbeat', { name, agent_type: _agentType, tool: _agentTool }) } catch {}
     return [
       `Host started on ${hostUrl} (pid ${child.pid}).`,
       `Joined as '${name}'.`,
@@ -322,6 +341,14 @@ async function runMcp() {
     const { method, id, params = {} } = msg
 
     if (method === 'initialize') {
+      const cname = ((params.clientInfo || {}).name || '').toLowerCase()
+      _agentTool = (params.clientInfo || {}).name || 'unknown'
+      _agentType = cname.includes('cursor')   ? 'cursor'
+                 : cname.includes('windsurf') ? 'windsurf'
+                 : cname.includes('continue') ? 'continue'
+                 : cname.includes('claude')   ? 'claude'
+                 : 'unknown'
+
       const cfg = loadCfg()
       let instructions, status = cfg ? 'connected' : 'setup_required'
       if (!cfg) {
@@ -354,6 +381,54 @@ async function runMcp() {
   }
 }
 
+// ── inject ────────────────────────────────────────────────────────────────────
+
+function runInject(targetDir) {
+  let rules
+  try {
+    rules = fs.readFileSync(RULES_FILE, 'utf8')
+  } catch {
+    console.error(`rules/AGENT.md not found at ${RULES_FILE}`)
+    process.exit(1)
+  }
+
+  // Files that accept plain-text coordination rules
+  const targets = ['.cursorrules', '.windsurfrules', 'AGENT.md']
+  const MARKER  = '<!-- linker-rules -->'
+  const section = `\n${MARKER}\n# linker coordination rules (auto-generated)\n${rules}\n`
+
+  for (const file of targets) {
+    const dest     = path.join(targetDir, file)
+    const existing = fs.existsSync(dest) ? fs.readFileSync(dest, 'utf8') : ''
+    if (existing.includes(MARKER)) {
+      console.log(`${file}: already up to date`)
+      continue
+    }
+    fs.writeFileSync(dest, existing + section)
+    console.log(`Injected linker rules → ${dest}`)
+  }
+
+  // Manual steps for formats we can't auto-patch
+  const adapterPath = path.relative(targetDir, path.join(__dirname, 'adapters', 'openai.js'))
+  console.log(`
+Manual setup for other AI tools:
+
+  Aider:
+    aider --read AGENT.md
+
+  Continue (config.json):
+    add the contents of AGENT.md to "systemMessage" in ~/.continue/config.json
+
+  OpenAI-based agents (Codex CLI, etc.):
+    node ${adapterPath} --name YOUR_NAME
+    then fetch tools from http://localhost:7720/tools
+
+  File-based agents (no plugin system):
+    node ${path.relative(targetDir, path.join(__dirname, 'adapters', 'filewatch.js'))} --name YOUR_NAME
+    then read ~/.linker/bus/{context,who,messages,pending}.json as context
+`)
+}
+
 // ── Entry ─────────────────────────────────────────────────────────────────────
 
 const [,, cmd = 'mcp', ...args] = process.argv
@@ -361,4 +436,5 @@ const [,, cmd = 'mcp', ...args] = process.argv
 if      (cmd === 'mcp' || cmd === '')  runMcp()
 else if (cmd === 'host')               { startHost(parseInt(args[0]) || DEFAULT_PORT); console.log(`Host → http://localhost:${parseInt(args[0]) || DEFAULT_PORT}`) }
 else if (cmd === '_daemon')            startHost(parseInt(args[0]) || DEFAULT_PORT)
-else                                   { console.error('Usage: linker-mcp [mcp|host [PORT]]'); process.exit(1) }
+else if (cmd === 'inject')             runInject(args[0] || process.cwd())
+else                                   { console.error('Usage: linker-mcp [mcp|host [PORT]|inject [DIR]]'); process.exit(1) }
